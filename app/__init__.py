@@ -1,17 +1,17 @@
-
+import os
 from flask import Flask
 from app.database import init_db
 
 def create_app():
-
     app = Flask(__name__)
 
-    app.config["SECRET_KEY"] = "expense-tracker-secret-key"
+    app.config["SECRET_KEY"] = os.environ.get(
+        "SECRET_KEY",
+        "development-key-change-this"
+    )
 
-    # Initialize database
     init_db(app)
 
-    # Register website routes
     from app.routes import main
     app.register_blueprint(main)
 
