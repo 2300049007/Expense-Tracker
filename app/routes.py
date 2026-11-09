@@ -1,15 +1,19 @@
 
-from flask import Blueprint, render_template, request, redirect, url_for, make_response
+from flask import Blueprint, render_template, request, redirect, url_for, make_response, flash
 from app.database import db, Expense, Income, Budget
 import csv
 from io import StringIO
 from datetime import date, datetime
+from flask_login import login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from app.database import User
 
 main = Blueprint("main", __name__)
 
 
 # Home page
 @main.route("/")
+@login_required
 def home():
 
     current_month = date.today().strftime("%Y-%m")
@@ -26,7 +30,9 @@ def home():
     )
 
     # Get expenses
-    expense_query = Expense.query
+    expense_query = Expense.query.filter_by(
+        user_id=current_user.id
+    )
 
     if search:
         expense_query = expense_query.filter(
@@ -68,17 +74,23 @@ def home():
     expenses = expense_query.all()
 
     # Get income records
-    income_records = Income.query.order_by(
+    income_records = Income.query.filter_by(
+        user_id=current_user.id
+    ).order_by(
         Income.date.desc(), Income.id.desc()
     ).all()
 
     # Calculate totals
     total_expenses = db.session.query(
         db.func.sum(Expense.amount)
+    ).filter(
+        Expense.user_id == current_user.id
     ).scalar() or 0
 
     total_income = db.session.query(
         db.func.sum(Income.amount)
+    ).filter(
+        Income.user_id == current_user.id
     ).scalar() or 0
 
     total_balance = total_income - total_expenses
@@ -88,6 +100,8 @@ def home():
     monthly_data = db.session.query(
         db.func.substr(Expense.date, 6, 2).label("month_number"),
         db.func.sum(Expense.amount).label("total")
+    ).filter(
+        Expense.user_id == current_user.id
     ).group_by(
         "month_number"
     ).order_by("month_number").all()
@@ -106,6 +120,8 @@ def home():
     category_data = db.session.query(
         Expense.category,
         db.func.sum(Expense.amount).label("total")
+    ).filter(
+        Expense.user_id == current_user.id
     ).group_by(Expense.category).all()
 
     category_labels = [
@@ -117,7 +133,9 @@ def home():
     ]
 
     # Biggest expense
-    biggest_expense = Expense.query.order_by(
+    biggest_expense = Expense.query.filter_by(
+        user_id=current_user.id
+    ).order_by(
         Expense.amount.desc()
     ).first()
 
@@ -125,6 +143,8 @@ def home():
     top_category = db.session.query(
         Expense.category,
         db.func.sum(Expense.amount).label("total")
+    ).filter(
+        Expense.user_id == current_user.id
     ).group_by(
         Expense.category
     ).order_by(
@@ -133,7 +153,8 @@ def home():
 
     # Monthly budget
     budget_record = Budget.query.filter_by(
-        month=current_month
+        month=current_month,
+        user_id=current_user.id
     ).first()
 
     monthly_budget = budget_record.amount if budget_record else 0
@@ -142,6 +163,7 @@ def home():
     monthly_spending = db.session.query(
         db.func.sum(Expense.amount)
     ).filter(
+        Expense.user_id == current_user.id,
         db.func.substr(Expense.date, 1, 7) == current_month
     ).scalar() or 0
 
@@ -205,7 +227,8 @@ def add_expense():
             title=title,
             amount=amount,
             category=category,
-            date=expense_date
+            date=expense_date,
+            user_id=current_user.id
         )
 
         db.session.add(expense)
@@ -237,7 +260,8 @@ def add_income():
         income = Income(
             title=title,
             amount=amount,
-            date=income_date
+            date=income_date,
+            user_id=current_user.id
         )
 
         db.session.add(income)
@@ -253,7 +277,10 @@ def add_income():
 @main.route("/delete-expense/<int:expense_id>", methods=["POST"])
 def delete_expense(expense_id):
 
-    expense = db.session.get(Expense, expense_id)
+    expense = Expense.query.filter_by(
+        id=expense_id,
+        user_id=current_user.id
+    ).first()
 
     if expense:
         db.session.delete(expense)
@@ -266,7 +293,10 @@ def delete_expense(expense_id):
 @main.route("/delete-income/<int:income_id>", methods=["POST"])
 def delete_income(income_id):
 
-    income = db.session.get(Income, income_id)
+    income = Income.query.filter_by(
+        id=income_id,
+        user_id=current_user.id
+    ).first()
 
     if income:
         db.session.delete(income)
@@ -295,12 +325,19 @@ def set_budget():
     except (ValueError, TypeError):
         return "Please enter a valid budget!", 400
 
-    budget = Budget.query.filter_by(month=month).first()
+    budget = Budget.query.filter_by(
+        month=month,
+        user_id=current_user.id
+    ).first()
 
     if budget:
         budget.amount = amount
     else:
-        budget = Budget(month=month, amount=amount)
+        budget = Budget(
+            month=month,
+            amount=amount,
+            user_id=current_user.id
+        )
         db.session.add(budget)
 
     db.session.commit()
@@ -312,7 +349,9 @@ def set_budget():
 @main.route("/export-expenses")
 def export_expenses():
 
-    expenses = Expense.query.order_by(
+    expenses = Expense.query.filter_by(
+        user_id=current_user.id
+    ).order_by(
         Expense.date.desc()
     ).all()
 
@@ -343,7 +382,10 @@ def export_expenses():
 @main.route("/edit-expense/<int:expense_id>", methods=["GET", "POST"])
 def edit_expense(expense_id):
 
-    expense = db.session.get(Expense, expense_id)
+    expense = Expense.query.filter_by(
+        id=expense_id,
+        user_id=current_user.id
+    ).first()
 
     if expense is None:
         return "Expense not found", 404
@@ -380,3 +422,92 @@ def edit_expense(expense_id):
         "edit_expense.html",
         expense=expense
     )
+
+# USER REGISTRATION
+
+@main.route("/register", methods=["GET", "POST"])
+def register():
+
+    if current_user.is_authenticated:
+        return redirect(url_for("main.home"))
+
+    if request.method == "POST":
+
+        username = request.form.get("username", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if not username or not email or not password:
+            flash("Please fill in all fields!", "error")
+            return redirect(url_for("main.register"))
+
+        if password != confirm_password:
+            flash("Passwords do not match!", "error")
+            return redirect(url_for("main.register"))
+
+        if len(password) < 8:
+            flash("Password must contain at least 8 characters!", "error")
+            return redirect(url_for("main.register"))
+
+        existing_user = User.query.filter(
+            (User.username == username) |
+            (User.email == email)
+        ).first()
+
+        if existing_user:
+            flash("Username or email already exists!", "error")
+            return redirect(url_for("main.register"))
+
+        new_user = User(
+            username=username,
+            email=email,
+            password_hash=generate_password_hash(password)
+        )
+
+        db.session.add(new_user)
+        db.session.commit()
+
+        login_user(new_user)
+
+        flash("Registration successful!", "success")
+        return redirect(url_for("main.home"))
+
+    return render_template("register.html")
+
+
+# USER LOGIN
+
+@main.route("/login", methods=["GET", "POST"])
+def login():
+
+    if current_user.is_authenticated:
+        return redirect(url_for("main.home"))
+
+    if request.method == "POST":
+
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+
+        user = User.query.filter_by(email=email).first()
+
+        if user and check_password_hash(user.password_hash, password):
+            login_user(user)
+            return redirect(url_for("main.home"))
+
+        flash("Invalid email or password!", "error")
+
+    return render_template("login.html")
+
+
+# USER LOGOUT
+
+@main.route("/logout")
+@login_required
+def logout():
+
+    logout_user()
+
+    flash("You have been logged out!", "success")
+
+    return redirect(url_for("main.login"))

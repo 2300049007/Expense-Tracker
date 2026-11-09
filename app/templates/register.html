@@ -1,0 +1,146 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Account | FinTrack</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #171b2e, #6555d9);
+            padding: 20px;
+        }
+
+        .auth-card {
+            background: white;
+            width: 100%;
+            max-width: 440px;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+
+        .auth-brand {
+            text-align: center;
+            font-size: 30px;
+            font-weight: bold;
+            color: #171b2e;
+            margin-bottom: 10px;
+        }
+
+        .auth-brand span {
+            color: #7162e8;
+        }
+
+        .auth-subtitle {
+            text-align: center;
+            color: #888da0;
+            margin-bottom: 30px;
+        }
+
+        .auth-card label {
+            display: block;
+            margin: 17px 0 8px;
+            font-weight: 600;
+        }
+
+        .auth-card input {
+            width: 100%;
+            padding: 14px;
+            border: 1px solid #ddd;
+            border-radius: 9px;
+            outline: none;
+        }
+
+        .auth-card input:focus {
+            border-color: #7162e8;
+        }
+
+        .auth-button {
+            width: 100%;
+            margin-top: 25px;
+            padding: 14px;
+            border: none;
+            border-radius: 9px;
+            background: #6555d9;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .auth-button:hover {
+            background: #5142c2;
+        }
+
+        .auth-footer {
+            text-align: center;
+            margin-top: 25px;
+            color: #777;
+        }
+
+        .auth-footer a {
+            color: #6555d9;
+            font-weight: bold;
+            text-decoration: none;
+        }
+
+        .auth-message {
+            padding: 12px;
+            border-radius: 8px;
+            background: #fee2e2;
+            color: #b91c1c;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="auth-card">
+
+    <div class="auth-brand">Fin<span>Track</span></div>
+
+    <p class="auth-subtitle">Create your personal finance account</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="auth-message">{{ message }}</div>
+        {% endfor %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('main.register') }}">
+
+        <label>Full Name</label>
+        <input type="text" name="username" placeholder="Enter your name" required>
+
+        <label>Email Address</label>
+        <input type="email" name="email" placeholder="Enter your email" required>
+
+        <label>Password</label>
+        <input type="password" name="password" placeholder="Create a password" minlength="8" required>
+
+        <label>Confirm Password</label>
+        <input type="password" name="confirm_password" placeholder="Confirm your password" minlength="8" required>
+
+        <button type="submit" class="auth-button">
+            Create Account
+        </button>
+
+    </form>
+
+    <div class="auth-footer">
+        Already have an account?
+        <a href="{{ url_for('main.login') }}">Login</a>
+    </div>
+
+</div>
+
+</body>
+</html>
